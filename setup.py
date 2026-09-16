@@ -5,6 +5,7 @@ import chromadb
 from langchain.agents import create_agent
 from google import genai
 from groq import Groq
+from tasks_store import add_task
 
 load_dotenv()
 
@@ -72,12 +73,14 @@ def search_docs(query: str) -> str:
     return "\n\n".join(results["documents"][0])
 
 
-TASKS = []  # simulated task storage, in-memory for now
+# TASKS = []  # simulated task storage, in-memory for now
+
+
 
 def create_task(description: str) -> str:
     """Create a task/reminder. Use this when someone asks you to remind them
     of something or track an action item."""
-    TASKS.append(description)
+    add_task(description)
     return f"Task created: {description}"
 
 

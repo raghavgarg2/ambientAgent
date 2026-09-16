@@ -6,7 +6,7 @@ description, not just an exact one format.
 
 from setup import agent
 from langgraph.errors import GraphRecursionError
-import setup
+from tasks_store import load_tasks, save_tasks
 
 test_set = [
     "remind me to review the PR after lunch",
@@ -18,7 +18,7 @@ test_set = [
 
 
 def evaluate_create_task(test_set):
-    setup.TASKS.clear()  # reset before the eval run
+    save_tasks([])  # reset before the eval run
     results_log = []
 
     for text in test_set:
@@ -35,7 +35,7 @@ def evaluate_create_task(test_set):
 
         results_log.append({"input": text, "reply": reply})
 
-    return results_log, list(setup.TASKS)
+    return results_log, load_tasks()
 
 
 if __name__ == "__main__":
@@ -46,6 +46,6 @@ if __name__ == "__main__":
         print(f"Input: {r['input']}")
         print(f"Reply: {r['reply']}\n")
 
-    print("Actual TASKS list contents:")
+    print("Actual tasks.json contents:")
     for t in tasks_created:
         print(f"  - {t}")
