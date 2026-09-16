@@ -1,10 +1,7 @@
 """
-Wires the working participant-agent logic (from week1_participant.py) into
-a real Slack workspace via Socket Mode.
-
-Key change from the terminal version: CHANNEL_HISTORIES is now a dict
-keyed by channel ID, not a single global list - each channel needs its
-own independent memory, since a real workspace has multiple channels.
+Wires the working participant-agent logic into a real Slack workspace via
+Socket Mode. Channel history now persists to disk (memory.py) instead of
+living only in memory - survives script restarts.
 """
 
 import os
@@ -14,17 +11,15 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from setup import agent
 from week1_participant import should_respond, trim
+from memory import load_channel_history, save_channel_history
 
 load_dotenv()
 
 slack_app = App(token=os.getenv("SLACK_BOT_TOKEN"))
 
-CHANNEL_HISTORIES = {}
-
 
 @slack_app.event("message")
 def handle_slack_message(event, say):
-    # ignore messages sent BY the bot itself
     if event.get("bot_id"):
         return
 
@@ -32,15 +27,12 @@ def handle_slack_message(event, say):
     sender = event.get("user", "unknown")
     text = event.get("text", "")
 
-    if channel not in CHANNEL_HISTORIES:
-        CHANNEL_HISTORIES[channel] = []
-
-    history = CHANNEL_HISTORIES[channel]
+    history = load_channel_history(channel)
     history.append({"role": "user", "content": f"{sender}: {text}"})
     history = trim(history)
 
     if not should_respond(text, sender):
-        CHANNEL_HISTORIES[channel] = history
+        save_channel_history(channel, history)
         return
 
     result = agent.invoke({"messages": history})
@@ -49,7 +41,8 @@ def handle_slack_message(event, say):
         reply = reply[0]["text"]
 
     history.append({"role": "assistant", "content": reply})
-    CHANNEL_HISTORIES[channel] = trim(history)
+    history = trim(history)
+    save_channel_history(channel, history)
 
     say(reply)
 
