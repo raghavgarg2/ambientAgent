@@ -24,13 +24,22 @@ def handle_message(sender, text):
         print(f"[{sender}]: {text}")
         print("  -> (agent stays silent)\n")
         return
-    try:
-        result = agent.invoke({"messages": CHANNEL_HISTORY},{"recursion_limit":10})
+
+    def _invoke_agent():
+        result = agent.invoke({"messages": CHANNEL_HISTORY}, {"recursion_limit": 10})
         reply = result["messages"][-1].content
         if isinstance(reply, list):
-          reply = reply[0]["text"]
+            reply = reply[0]["text"]
+        return reply
+    
+    try:
+        reply = call_with_retry(
+        _invoke_agent,
+        max_retries=3,
+        fallback="Sorry, I am having trouble connecting right now — please try again in a moment."
+    )
     except GraphRecursionError:
-        reply = "I tried looking into this but couldn't find a clear answer in the docs — you may want to check manually."
+        reply = "I tried looking into this but could not find a clear answer in the docs - you may want to check manually."
 
 
 
