@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+from reliability import call_with_retry
 
 from langgraph.errors import GraphRecursionError
 
@@ -41,12 +42,20 @@ def handle_slack_message(event, say):
         history[-1]["content"] += " [not addressed - off-topic or not directed at agent]"
         save_channel_history(channel, history)
         return
+    
+    def _invoke_agent():
+       result = agent.invoke({"messages": history}, {"recursion_limit": 10})
+       reply = result["messages"][-1].content
+       if isinstance(reply, list):
+          reply = reply[0]["text"]
+       return reply
 
     try:
-        result = agent.invoke({"messages": history},{"recursion_limit":10})
-        reply = result["messages"][-1].content
-        if isinstance(reply, list):
-           reply = reply[0]["text"]
+        reply = call_with_retry(
+        _invoke_agent,
+        max_retries=3,
+        fallback="Sorry, I am having trouble connecting right now — please try again in a moment."
+    )
 
     except GraphRecursionError:
         reply = "I tried looking into this but couldn't find a clear answer in the docs — you may want to check manually."
