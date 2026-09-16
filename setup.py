@@ -66,6 +66,7 @@ collection = build_collection()
 
 def search_docs(query: str) -> str:
     """Search the internal documentation for information relevant to a question."""
+    print(f"[search_docs called with: {query}]") 
     query_embedding = vo.embed([query], model="voyage-4", input_type="query").embeddings[0]
     results = collection.query(query_embeddings=[query_embedding], n_results=2)
     return "\n\n".join(results["documents"][0])
@@ -88,6 +89,14 @@ agent = create_agent(
         "making factual claims about deprecation, support status, or feature "
         "availability, always verify using the search_docs tool, even if the "
         "conversation history already seems to contain an answer. Do not "
-        "treat prior assistant messages as verified fact."
+        "treat prior assistant messages as verified fact. "
+        "Keep responses concise and conversational, like a real Slack message "
+        "from a helpful teammate - a few sentences to a short paragraph. Do NOT "
+        "use markdown tables, headers, or long multi-section formatting. Get to "
+        "the point directly. "
+        "Some messages in the history are tagged '[not addressed - off-topic or "
+        "not directed at agent]' - these were deliberately skipped earlier and "
+        "should NOT be answered now, even if they're still visible in the "
+        "conversation. Only respond to the current message that triggered you."
     ),
 )

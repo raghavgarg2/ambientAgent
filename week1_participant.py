@@ -1,6 +1,7 @@
 
 
 from setup import agent, groq_client
+from langgraph.errors import GraphRecursionError
 
 CHANNEL_HISTORY = []
 
@@ -22,11 +23,15 @@ def handle_message(sender, text):
         print(f"[{sender}]: {text}")
         print("  -> (agent stays silent)\n")
         return
+    try:
+        result = agent.invoke({"messages": CHANNEL_HISTORY},{"recursion_limit":10})
+        reply = result["messages"][-1].content
+        if isinstance(reply, list):
+          reply = reply[0]["text"]
+    except GraphRecursionError:
+        reply = "I tried looking into this but couldn't find a clear answer in the docs — you may want to check manually."
 
-    result = agent.invoke({"messages": CHANNEL_HISTORY})
-    reply = result["messages"][-1].content
-    if isinstance(reply, list):
-        reply = reply[0]["text"]
+
 
     CHANNEL_HISTORY.append({"role": "assistant", "content": reply})
     CHANNEL_HISTORY = trim(CHANNEL_HISTORY)
@@ -65,6 +70,11 @@ say yes if the question is genuinely work/technical in nature AND not
 clearly addressed to the human group.
 
 explicitly stating that group-phrased questions should still get a "yes" if the topic is clearly technical/tooling-related, overriding the group-phrasing signal in that specific case.
+
+"If search_docs does not contain information that directly confirms or "
+"denies a specific claim after 2-3 attempts, say so explicitly rather "
+"than answering from general knowledge or continuing to search."
+
 """
 
     response = groq_client.chat.completions.create(

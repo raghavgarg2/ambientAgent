@@ -4,10 +4,13 @@ Socket Mode. Channel history now persists to disk (memory.py) instead of
 living only in memory - survives script restarts.
 """
 
+
 import os
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+
+from langgraph.errors import GraphRecursionError
 
 from setup import agent
 from week1_participant import should_respond, trim
@@ -32,13 +35,21 @@ def handle_slack_message(event, say):
     history = trim(history)
 
     if not should_respond(text, sender):
+        # tag this message as deliberately not addressed, so if the agent
+    # later runs (triggered by a different message nearby), it doesn't
+    # try to retroactively answer something we chose to skip
+        history[-1]["content"] += " [not addressed - off-topic or not directed at agent]"
         save_channel_history(channel, history)
         return
 
-    result = agent.invoke({"messages": history})
-    reply = result["messages"][-1].content
-    if isinstance(reply, list):
-        reply = reply[0]["text"]
+    try:
+        result = agent.invoke({"messages": history},{"recursion_limit":10})
+        reply = result["messages"][-1].content
+        if isinstance(reply, list):
+           reply = reply[0]["text"]
+
+    except GraphRecursionError:
+        reply = "I tried looking into this but couldn't find a clear answer in the docs — you may want to check manually."
 
     history.append({"role": "assistant", "content": reply})
     history = trim(history)
