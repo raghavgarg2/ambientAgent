@@ -2,6 +2,7 @@
 
 from setup import agent, groq_client
 from langgraph.errors import GraphRecursionError
+from reliability import call_with_retry
 
 CHANNEL_HISTORY = []
 
@@ -77,32 +78,18 @@ explicitly stating that group-phrased questions should still get a "yes" if the 
 
 """
 
-    response = groq_client.chat.completions.create(
+    def _call_groq():
+      
+      response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[{"role": "user", "content": prompt}]
-        
-    )
-    decision = response.choices[0].message.content.strip().lower()
+        )
+      return response.choices[0].message.content.strip().lower()
+
+    decision = call_with_retry(_call_groq, fallback="no")
     return "yes" in decision
 
 
-# def handle_message(sender, text):
-#     CHANNEL_HISTORY.append({"role": "user", "content": f"{sender}: {text}"})
-
-#     if not should_respond(text, sender):
-#         print(f"[{sender}]: {text}")
-#         print("  -> (agent stays silent)\n")
-#         return
-
-#     result = agent.invoke({"messages": CHANNEL_HISTORY})
-#     reply = result["messages"][-1].content
-#     if isinstance(reply, list):
-#         reply = reply[0]["text"]
-
-#     CHANNEL_HISTORY.append({"role": "assistant", "content": reply})
-
-#     print(f"[{sender}]: {text}")
-#     print(f"  -> agent responds: {reply}\n")
 
 
 if __name__ == "__main__":
