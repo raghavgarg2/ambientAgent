@@ -6,6 +6,8 @@ living only in memory - survives script restarts.
 
 
 import os
+from health_check import run_startup_checks
+from setup import groq_client, vo
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -68,6 +70,7 @@ def handle_slack_message(event, say):
 
 
 if __name__ == "__main__":
+    run_startup_checks(groq_client, vo)
     handler = SocketModeHandler(slack_app, os.getenv("SLACK_APP_TOKEN"))
     print("ambient-agent is running. Go send it a message in Slack.")
     handler.start()
