@@ -1,9 +1,10 @@
 """
 Wires the working participant-agent logic into a real Slack workspace via
 Socket Mode. Channel history now persists to disk (memory.py) instead of
-living only in memory - survives script restarts.
+living only in memory - survives script restarts. Long-term memory
+extracts durable facts separately, so they survive even after old
+messages get trimmed out of channel history.
 """
-
 
 import os
 from health_check import run_startup_checks
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from reliability import call_with_retry
+from long_term_memory import load_memory, save_fact, extract_fact
 
 from langgraph.errors import GraphRecursionError
 
@@ -38,27 +40,37 @@ def handle_slack_message(event, say):
     history = trim(history)
 
     if not should_respond(text, sender):
-        # tag this message as deliberately not addressed, so if the agent
-    # later runs (triggered by a different message nearby), it doesn't
-    # try to retroactively answer something we chose to skip
         history[-1]["content"] += " [not addressed - off-topic or not directed at agent]"
         save_channel_history(channel, history)
         return
-    
+
+    fact = extract_fact(groq_client, sender, text)
+    print(f"[long-term memory check] extracted: {fact}")
+    if fact:
+        save_fact(channel, fact)
+
+    facts = load_memory(channel)
+    messages_for_agent = list(history)
+    if facts:
+        facts_text = "\n".join(f"- {f}" for f in facts)
+        messages_for_agent.insert(0, {
+            "role": "user",
+            "content": f"[Remembered facts about this channel:\n{facts_text}]"
+        })
+
     def _invoke_agent():
-       result = agent.invoke({"messages": history}, {"recursion_limit": 10})
-       reply = result["messages"][-1].content
-       if isinstance(reply, list):
-          reply = reply[0]["text"]
-       return reply
+        result = agent.invoke({"messages": messages_for_agent}, {"recursion_limit": 10})
+        reply = result["messages"][-1].content
+        if isinstance(reply, list):
+            reply = reply[0]["text"]
+        return reply
 
     try:
         reply = call_with_retry(
-        _invoke_agent,
-        max_retries=3,
-        fallback="Sorry, I am having trouble connecting right now — please try again in a moment."
-    )
-
+            _invoke_agent,
+            max_retries=3,
+            fallback="Sorry, I am having trouble connecting right now — please try again in a moment."
+        )
     except GraphRecursionError:
         reply = "I tried looking into this but couldn't find a clear answer in the docs — you may want to check manually."
 
